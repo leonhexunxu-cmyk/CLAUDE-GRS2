@@ -264,3 +264,44 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--surface); 
 .spooky-ghost { position: absolute; top: 2px; left: 0; width: 18px; height: 18px; will-change: transform, opacity; }
 .spooky-ghost path { fill: #f4f1fa; stroke: #6a3fa0; stroke-width: 1.2; }
 .spooky-static { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+
+/* Launch animation (once per panel open). Never intercepts the pointer; any key or click skips it. */
+.launch {
+  position: fixed; inset: 0; z-index: 50; pointer-events: none; overflow: hidden;
+  display: grid; place-items: center; background: var(--bg);
+}
+.launch-center { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.launch-logo { width: 56px; height: 56px; fill: none; stroke: var(--accent); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.launch-logo .pulse { stroke-width: 2.4; }
+.launch-title { font-size: 18px; font-weight: 600; letter-spacing: .01em; color: var(--text); }
+.launch-sub { font-size: 11.5px; color: var(--muted); }
+.launch-halloween .launch-logo .pulse { stroke: var(--season); }
+
+.launch .web { position: absolute; width: clamp(70px, 16vmin, 140px); height: clamp(70px, 16vmin, 140px); }
+.launch .web svg { width: 100%; height: 100%; }
+.launch .web path { stroke: var(--muted); opacity: .55; }
+.web-tl { top: 0; left: 0; transform-origin: 0 0; }
+.web-tr { top: 0; right: 0; } .web-tr svg { transform: scaleX(-1); }
+.web-bl { bottom: 0; left: 0; } .web-bl svg { transform: scaleY(-1); }
+.web-br { bottom: 0; right: 0; } .web-br svg { transform: scale(-1, -1); }
+
+.launch .spider { position: absolute; top: 0; width: 28px; height: 84px; }
+.launch .spider svg { width: 100%; height: 100%; overflow: visible; }
+.spider-1 { left: 22%; }
+.spider-2 { right: 26%; height: 120px; }
+.spider .thread { stroke: var(--muted); stroke-width: .8; opacity: .7; }
+.spider .spider-body { fill: #2a2233; }
+.spider .legs { fill: none; stroke: #2a2233; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.spider .eye { fill: var(--season); }
+:root[data-theme="dark"] .spider .spider-body { fill: #6f5a92; }
+:root[data-theme="dark"] .spider .legs { stroke: #b9a7d6; }
+
+.launch .pumpkins { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: clamp(24px, 10vw, 120px); }
+.launch .pumpkin { width: 46px; height: 42px; }
+.launch .pumpkin.p2 { width: 58px; height: 52px; }
+.launch .pumpkin svg { width: 100%; height: 100%; overflow: visible; }
+.pumpkin .p-side { fill: #c4651d; }
+.pumpkin .p-mid { fill: #de7a28; }
+.pumpkin .stem { fill: none; stroke: #4f6b2a; stroke-width: 3.5; stroke-linecap: round; }
+.pumpkin .face { fill: #3a1f0a; }
+:root[data-theme="dark"] .pumpkin .face { fill: #ffd27a; }

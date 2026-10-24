@@ -64,6 +64,8 @@ Pinned commands (up to 4) appear as one-click shortcuts. When nothing is pinned,
 
 ### Halloween mode (through Nov 1, 2026)
 
+When the panel opens, a short launch animation (about 1.4 s) draws the Quick Debug logo. It never blocks the panel: clicks pass through, any key or click skips it, and it is not shown when the system prefers reduced motion. Through Nov 1 it is a little longer (about 2 s) and adds cobwebs in the corners, two spiders dropping on their threads and a row of pumpkins.
+
 Until **November 1, 2026 inclusive** (your local date), the accent turns purple, the console prompt turns orange, and a tiny spiderweb sits in the console corner. Status colours don't change. `/spooky` sends a small ghost across its own lane in the console log once, about 2.6 s, then removes it. With reduced motion it shows a still ghost instead. From November 2 everything returns to normal automatically, and `/spooky` reports that the season is over.
 
 ## How capture works
@@ -103,6 +105,7 @@ src/
   prefs.ts     local theme, pins and usage counts
   season.ts    Halloween date window
   spooky.ts    /spooky animation (isolated)
+  launch.ts    launch animation (seasonal variant through Nov 1)
   filter.ts    status views, type and text filters, summary counts
   redact.ts    URL redaction for reports
   report.ts    diagnostic report text

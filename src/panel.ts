@@ -11,6 +11,7 @@ import { COMMANDS, parseCommand, pinnableText, type Command } from "./commands.j
 import { MAX_PINS, Prefs, type StorageLike, type ThemePref } from "./prefs.js";
 import { isHalloweenSeason, msUntilSeasonEnds } from "./season.js";
 import { ghostSvg, runSpooky } from "./spooky.js";
+import { playLaunch } from "./launch.js";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -995,6 +996,8 @@ const devtools = globalThis.chrome?.devtools;
 applyTheme();
 devtools?.panels?.setThemeChangeHandler?.(() => applyTheme());
 applySeason();
+// Cosmetic splash; capture below starts at the same time and is not delayed by it.
+playLaunch(document.body);
 renderShortcuts();
 renderFilterState();
 renderNotice();
