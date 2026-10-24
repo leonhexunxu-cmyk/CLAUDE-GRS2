@@ -1,0 +1,22 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # Playwright is a test-only tool, installed without touching package.json.
+      - run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - run: node tests/ui/panel-ui.mjs
+      - run: xvfb-run -a node tests/integration/real-devtools.mjs

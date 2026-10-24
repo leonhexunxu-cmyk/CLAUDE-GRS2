@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "chrome"],
+    "outDir": "build-test",
+    "rootDir": "."
+  },
+  "include": ["src/model.ts", "src/filter.ts", "src/redact.ts", "src/report.ts", "src/format.ts", "src/store.ts", "src/capture.ts", "tests/**/*.ts"]
+}

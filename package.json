@@ -1,0 +1,20 @@
+{
+  "name": "quick-debug",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Quick Debug: a focused network-request panel for Chrome DevTools.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test \"build-test/tests/*.test.js\"",
+    "test:ui": "npm run build && node tests/ui/panel-ui.mjs",
+    "testpages": "node test-pages/server.mjs",
+    "test:integration": "npm run build && node tests/integration/real-devtools.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.6",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}

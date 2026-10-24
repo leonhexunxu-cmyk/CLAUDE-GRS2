@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quick Debug</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <label class="search">
+        <span class="visually-hidden">Search requests</span>
+        <input id="search" type="search" placeholder="Search URL, method, status…  ( / )" autocomplete="off" spellcheck="false" />
+      </label>
+      <div class="views" role="radiogroup" aria-label="Show requests">
+        <button type="button" role="radio" data-view="all" aria-checked="true">All <span class="count" data-count="total">0</span></button>
+        <button type="button" role="radio" data-view="problems" aria-checked="false">Problems <span class="count" data-count="problems">0</span></button>
+        <button type="button" role="radio" data-view="failed" aria-checked="false">No response <span class="count" data-count="failed">0</span></button>
+        <button type="button" role="radio" data-view="http-error" aria-checked="false">HTTP errors <span class="count" data-count="httpErrors">0</span></button>
+        <button type="button" role="radio" data-view="redirect" aria-checked="false">Redirects <span class="count" data-count="redirects">0</span></button>
+        <button type="button" role="radio" data-view="slow" aria-checked="false" title="Took 1 s or longer">Slow <span class="count" data-count="slow">0</span></button>
+      </div>
+      <label class="type">
+        <span class="visually-hidden">Resource type</span>
+        <select id="type"><option value="all">All types</option></select>
+      </label>
+      <button type="button" id="clear" class="quiet" title="Clear the list (does not affect the Network panel)">Clear</button>
+    </header>
+
+    <div id="notice" class="notice" role="status" hidden>
+      <span>Capture started when DevTools opened, so earlier requests may be missing.</span>
+      <button type="button" id="reload" class="quiet">Reload page to capture everything</button>
+    </div>
+
+    <main class="split">
+      <section class="list" aria-label="Requests">
+        <table role="grid" aria-label="Captured requests">
+          <thead role="rowgroup">
+            <tr role="row">
+              <th role="columnheader" scope="col" class="c-status">Status</th>
+              <th role="columnheader" scope="col" class="c-method">Method</th>
+              <th role="columnheader" scope="col" class="c-name">Name</th>
+              <th role="columnheader" scope="col" class="c-type">Type</th>
+              <th role="columnheader" scope="col" class="c-time">Time</th>
+            </tr>
+          </thead>
+          <tbody id="rows" role="rowgroup"></tbody>
+        </table>
+        <p id="empty" class="empty"></p>
+      </section>
+
+      <aside id="detail" class="detail" aria-label="Request details" hidden>
+        <div class="detail-head">
+          <h2 id="d-name"></h2>
+          <button type="button" id="close" class="quiet icon" aria-label="Close details" title="Close (Esc)">×</button>
+        </div>
+        <div class="actions">
+          <button type="button" id="copy" class="primary" title="Copy a redacted report (c)">Copy report</button>
+          <button type="button" id="copy-url" class="quiet" title="Copy the full, unredacted URL">Copy URL</button>
+          <button type="button" id="open-network" class="quiet" hidden>Show in Network panel</button>
+        </div>
+        <p id="toast" class="toast" role="status" aria-live="polite"></p>
+
+        <section class="block">
+          <p id="d-outcome" class="outcome"></p>
+          <p id="d-meaning" class="meaning"></p>
+        </section>
+
+        <section class="block">
+          <h3>Request</h3>
+          <dl id="d-request"></dl>
+        </section>
+
+        <section class="block">
+          <h3>Timing</h3>
+          <div id="d-bar" class="bar" aria-hidden="true"></div>
+          <dl id="d-timing" class="timing"></dl>
+        </section>
+
+        <section class="block">
+          <h3>Response</h3>
+          <dl id="d-response"></dl>
+        </section>
+
+        <details class="block">
+          <summary>Report preview</summary>
+          <pre id="d-report" tabindex="0"></pre>
+        </details>
+      </aside>
+    </main>
+
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>

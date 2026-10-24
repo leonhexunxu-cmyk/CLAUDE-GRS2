@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Quick Debug",
+  "version": "0.1.0",
+  "description": "A focused DevTools panel for finding and understanding network-request problems. Local only.",
+  "minimum_chrome_version": "110",
+  "devtools_page": "devtools.html",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; connect-src 'none'; frame-src 'none'; form-action 'none'"
+  }
+}
