@@ -10,26 +10,60 @@
     <header class="toolbar">
       <label class="search">
         <span class="visually-hidden">Search requests</span>
-        <input id="search" type="search" placeholder="Search URL, method, status…  ( / )" autocomplete="off" spellcheck="false" />
+        <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5 14 14" /></svg>
+        <input id="search" type="search" placeholder="Search requests" autocomplete="off" spellcheck="false" />
       </label>
+
       <div class="views" role="radiogroup" aria-label="Show requests">
         <button type="button" role="radio" data-view="all" aria-checked="true">All <span class="count" data-count="total">0</span></button>
         <button type="button" role="radio" data-view="problems" aria-checked="false">Problems <span class="count" data-count="problems">0</span></button>
-        <button type="button" role="radio" data-view="failed" aria-checked="false">No response <span class="count" data-count="failed">0</span></button>
-        <button type="button" role="radio" data-view="http-error" aria-checked="false">HTTP errors <span class="count" data-count="httpErrors">0</span></button>
-        <button type="button" role="radio" data-view="redirect" aria-checked="false">Redirects <span class="count" data-count="redirects">0</span></button>
-        <button type="button" role="radio" data-view="slow" aria-checked="false" title="Took 1 s or longer">Slow <span class="count" data-count="slow">0</span></button>
+        <button type="button" role="radio" class="secondary" data-view="failed" aria-checked="false">No response <span class="count" data-count="failed">0</span></button>
+        <button type="button" role="radio" class="secondary" data-view="http-error" aria-checked="false">HTTP errors <span class="count" data-count="httpErrors">0</span></button>
+        <button type="button" role="radio" class="secondary" data-view="redirect" aria-checked="false">Redirects <span class="count" data-count="redirects">0</span></button>
+        <button type="button" role="radio" class="secondary" data-view="slow" aria-checked="false" title="Took 1 s or longer">Slow <span class="count" data-count="slow">0</span></button>
       </div>
-      <label class="type">
+
+      <label class="type wide-only">
         <span class="visually-hidden">Resource type</span>
         <select id="type"><option value="all">All types</option></select>
       </label>
+
+      <!-- Narrow panels: the secondary views and the type filter move here. -->
+      <details class="menu narrow-only" id="more">
+        <summary class="quiet" aria-label="More filters"><span id="more-label">Filters</span> <span aria-hidden="true">▾</span></summary>
+        <div class="menu-body" role="group" aria-label="More filters">
+          <button type="button" class="menu-item" data-view="failed">No response <span class="count" data-count="failed">0</span></button>
+          <button type="button" class="menu-item" data-view="http-error">HTTP errors <span class="count" data-count="httpErrors">0</span></button>
+          <button type="button" class="menu-item" data-view="redirect">Redirects <span class="count" data-count="redirects">0</span></button>
+          <button type="button" class="menu-item" data-view="slow">Slow <span class="count" data-count="slow">0</span></button>
+          <label class="menu-field">Type <select id="type-narrow"><option value="all">All types</option></select></label>
+        </div>
+      </details>
+
       <button type="button" id="clear" class="quiet" title="Clear the list (does not affect the Network panel)">Clear</button>
+
+      <details class="menu" id="actions">
+        <summary class="quiet icon" aria-label="More actions" title="More actions">⋯</summary>
+        <div class="menu-body right" role="group" aria-label="More actions">
+          <p class="menu-heading">Report of visible requests</p>
+          <button type="button" class="menu-item" data-action="download-md">Download Markdown</button>
+          <button type="button" class="menu-item" data-action="download-json">Download JSON</button>
+          <p class="menu-heading">Theme</p>
+          <div class="theme-choice" role="radiogroup" aria-label="Theme">
+            <button type="button" role="radio" data-theme-choice="auto">Auto</button>
+            <button type="button" role="radio" data-theme-choice="light">Light</button>
+            <button type="button" role="radio" data-theme-choice="dark">Dark</button>
+          </div>
+          <p class="menu-heading">Console</p>
+          <button type="button" class="menu-item" data-action="help">Show commands</button>
+          <button type="button" class="menu-item" data-action="reset-usage">Reset command usage</button>
+        </div>
+      </details>
     </header>
 
     <div id="notice" class="notice" role="status" hidden>
-      <span>Capture started when DevTools opened, so earlier requests may be missing.</span>
-      <button type="button" id="reload" class="quiet">Reload page to capture everything</button>
+      <span>Capture started when DevTools opened; earlier requests may be missing.</span>
+      <button type="button" id="reload" class="link">Reload to capture everything</button>
     </div>
 
     <main class="split">
@@ -46,7 +80,7 @@
           </thead>
           <tbody id="rows" role="rowgroup"></tbody>
         </table>
-        <p id="empty" class="empty"></p>
+        <div id="empty" class="empty"></div>
       </section>
 
       <aside id="detail" class="detail" aria-label="Request details" hidden>
@@ -54,16 +88,37 @@
           <h2 id="d-name"></h2>
           <button type="button" id="close" class="quiet icon" aria-label="Close details" title="Close (Esc)">×</button>
         </div>
+
+        <div class="status-line">
+          <span id="d-pill" class="pill"></span>
+          <span id="d-status-title"></span>
+          <button type="button" id="status-help" class="help" aria-expanded="false" aria-controls="d-help" title="What does this mean?">?</button>
+        </div>
+        <div id="d-help" class="help-box" hidden>
+          <p id="d-help-meaning"></p>
+          <p id="d-help-check" class="muted"></p>
+          <a id="d-help-ref" target="_blank" rel="noopener noreferrer" hidden>Reference (MDN) ↗</a>
+        </div>
+        <p id="d-meaning" class="meaning"></p>
+
         <div class="actions">
           <button type="button" id="copy" class="primary" title="Copy a redacted report (c)">Copy report</button>
-          <button type="button" id="copy-url" class="quiet" title="Copy the full, unredacted URL">Copy URL</button>
-          <button type="button" id="open-network" class="quiet" hidden>Show in Network panel</button>
+          <button type="button" id="download" class="quiet" title="Download a redacted technical report (Markdown)">Download</button>
+          <button type="button" id="copy-url" class="quiet">Copy URL</button>
+          <button type="button" id="open-network" class="quiet" hidden>Network panel</button>
         </div>
         <p id="toast" class="toast" role="status" aria-live="polite"></p>
 
+        <section class="block" id="analysis-block">
+          <h3>Analysis</h3>
+          <ul id="d-analysis" class="findings"></ul>
+        </section>
+
         <section class="block">
-          <p id="d-outcome" class="outcome"></p>
-          <p id="d-meaning" class="meaning"></p>
+          <h3>Timing</h3>
+          <div id="d-bar" class="bar" aria-hidden="true"></div>
+          <dl id="d-timing" class="timing"></dl>
+          <p id="d-timing-note" class="muted small"></p>
         </section>
 
         <section class="block">
@@ -71,23 +126,25 @@
           <dl id="d-request"></dl>
         </section>
 
-        <section class="block">
-          <h3>Timing</h3>
-          <div id="d-bar" class="bar" aria-hidden="true"></div>
-          <dl id="d-timing" class="timing"></dl>
-        </section>
-
-        <section class="block">
-          <h3>Response</h3>
+        <details class="block more">
+          <summary>More details</summary>
           <dl id="d-response"></dl>
-        </section>
-
-        <details class="block">
-          <summary>Report preview</summary>
+          <h3 class="sub">Report preview</h3>
           <pre id="d-report" tabindex="0"></pre>
         </details>
       </aside>
     </main>
+
+    <footer class="console" aria-label="Command console">
+      <div id="console-log" class="console-log" role="log" aria-live="polite" hidden></div>
+      <form id="console-form" class="console-row" autocomplete="off">
+        <span class="prompt" aria-hidden="true">›</span>
+        <label class="visually-hidden" for="console-input">Command</label>
+        <input id="console-input" type="text" spellcheck="false" placeholder="Type /help for commands  ( ` )" maxlength="300" />
+        <div id="shortcuts" class="shortcuts" aria-label="Shortcuts"></div>
+        <span class="season-corner" aria-hidden="true"></span>
+      </form>
+    </footer>
 
     <script type="module" src="panel.js"></script>
   </body>

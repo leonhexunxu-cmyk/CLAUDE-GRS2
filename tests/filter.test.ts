@@ -40,3 +40,11 @@ test("summary and types", () => {
   assert.deepEqual(summarize(requests), { total: 6, problems: 4, failed: 1, httpErrors: 2, redirects: 1, slow: 1 });
   assert.deepEqual(resourceTypes(requests), ["document", "fetch", "image", "script"]);
 });
+
+test("search matches the masked URL, not hidden secret values", () => {
+  const reqs = [normalizeEntry(harEntry({ url: "https://a.test/api?session=TOPSECRET&page=1" }), 1)];
+  assert.equal(applyFilter(reqs, { ...DEFAULT_FILTER, text: "TOPSECRET" }).length, 0);
+  assert.equal(applyFilter(reqs, { ...DEFAULT_FILTER, text: "session" }).length, 1);
+  assert.equal(applyFilter(reqs, { ...DEFAULT_FILTER, text: "page=1" }).length, 1);
+  assert.equal(reqs[0]!.url, "https://a.test/api?session=TOPSECRET&page=1", "captured URL unchanged");
+});

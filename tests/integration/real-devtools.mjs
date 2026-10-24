@@ -8,7 +8,7 @@
 // Opening the panel uses DevTools-internal modules (InspectorView). That is test
 // scaffolding only; if a Chrome update renames them, this script fails loudly.
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,8 @@ import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
 
 const { chromium } = createRequire(import.meta.url)("playwright");
+const { redactUrl } = await import("../../dist/redact.js");
+const { formatMs } = await import("../../dist/format.js");
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const ext = join(root, "dist");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -102,7 +104,8 @@ try {
   assert.equal(shown.length, finished.length, `panel shows ${shown.length} of ${finished.length} finished requests`);
   finished.forEach((e, i) => {
     const row = shown[i];
-    assert.equal(row.title, e.url, `row ${i} URL`);
+    assert.equal(row.title, redactUrl(e.url).url, `row ${i} URL (masked)`);
+    assert.equal(row.time, formatMs(e.time), `row ${i} time`);
     assert.equal(row.method, e.method, `row ${i} method`);
     assert.equal(row.status, e.status > 0 ? String(e.status) : "(failed)", `row ${i} status`);
     assert.equal(row.type, e.type, `row ${i} type`);
@@ -115,8 +118,9 @@ try {
   const pick = (fragment) => panel.evaluate(`(() => {
     const row = [...document.querySelectorAll("#rows tr")].find((tr) => tr.querySelector(".c-name").title.includes(${JSON.stringify(fragment)}));
     row.click();
-    return { outcome: document.getElementById("d-outcome").textContent, meaning: document.getElementById("d-meaning").textContent,
-             report: document.getElementById("d-report").textContent };
+    return { pill: document.getElementById("d-pill").textContent, meaning: document.getElementById("d-meaning").textContent,
+             report: document.getElementById("d-report").textContent, analysis: document.getElementById("d-analysis").textContent,
+             timingNote: document.getElementById("d-timing-note").textContent, url: document.getElementById("d-url").textContent };
   })()`);
   const data = await pick("access_token");
   assert.ok(!data.report.includes("SECRET-TOKEN-123"), "token redacted in report");
@@ -126,6 +130,77 @@ try {
   assert.match((await pick("/blocked-port")).meaning, /Chrome reported: net::ERR_UNSAFE_PORT/);
   assert.match((await pick("/api/unauthorized")).meaning, /can be expected behaviour/);
   assert.match((await pick("/slow")).report, /Duration:\s+1\.\d\d s \(slow\)/);
+
+  assert.ok(!data.url.includes("SECRET-TOKEN-123"), "inspector masks the token by default");
+
+  // Timing: every real entry's phases add up to its total (no inconsistency note).
+  for (let i = 0; i < finished.length; i++) {
+    const note = await panel.evaluate(`(() => { document.querySelectorAll("#rows tr")[${i}].click(); return document.getElementById("d-timing-note").textContent; })()`);
+    assert.doesNotMatch(note, /add up to/, `timing consistent for ${finished[i].url}`);
+  }
+
+  // Analysis on real data: the initiator of a fetch is the test page's script.
+  const ok = await pick("/api/created");
+  assert.match(ok.analysis, /Started by a script/);
+  assert.match(ok.analysis, /app\.js:\d+/);
+  assert.match((await pick("/drop")).analysis, /Likely source: The server/);
+  assert.match((await pick("/blocked-port")).analysis, /Likely source: The browser/);
+
+  // Status help.
+  await pick("/api/unavailable");
+  const help = await panel.evaluate(`(() => { document.getElementById("status-help").click(); return document.getElementById("d-help").innerText; })()`);
+  assert.match(help, /503 Service Unavailable/);
+
+  // Console in real DevTools: allowlist, /explain and /spooky (cleans up after itself).
+  const consoleRun = (cmd) => panel.evaluate(`(() => { const i = document.getElementById("console-input"); i.value = ${JSON.stringify(cmd)};
+    document.getElementById("console-form").requestSubmit(); return document.getElementById("console-log").innerText; })()`);
+  assert.match(await consoleRun("ls -la"), /cannot run shell commands or JavaScript/);
+  assert.match(await consoleRun("/explain 202"), /Accepted/);
+  const spookyLog = await consoleRun("/spooky");
+  const seasonOn = await panel.evaluate(`document.documentElement.dataset.season === "halloween"`);
+  if (seasonOn) {
+    assert.match(spookyLog, /Boo!/);
+    await sleep(3200);
+    assert.equal(await panel.evaluate(`document.querySelectorAll(".spooky-ghost,.spooky-lane").length + document.getAnimations().length`), 0, "/spooky leaves nothing behind");
+  } else {
+    assert.match(spookyLog, /expired/);
+  }
+
+  // Download in real DevTools: the technical report reaches the downloads folder, redacted.
+  const downloads = mkdtempSync(join(tmpdir(), "quick-debug-dl-"));
+  const version = await (await fetch(`http://127.0.0.1:${debugPort}/json/version`)).json();
+  const browserWs = new WebSocket(version.webSocketDebuggerUrl);
+  await new Promise((r) => browserWs.addEventListener("open", r));
+  browserWs.send(JSON.stringify({ id: 1, method: "Browser.setDownloadBehavior", params: { behavior: "allow", downloadPath: downloads } }));
+  await sleep(300);
+  await pick("access_token");
+  await panel.evaluate(`document.getElementById("download").click()`);
+  let downloaded = [];
+  for (let i = 0; i < 40 && downloaded.length === 0; i++) {
+    await sleep(250);
+    downloaded = readdirSync(downloads).filter((f) => f.endsWith(".md"));
+  }
+  browserWs.close();
+  if (downloaded.length) {
+    const content = readFileSync(join(downloads, downloaded[0]), "utf8");
+    assert.match(content, /access_token=\[REDACTED\]/);
+    assert.ok(!content.includes("SECRET-TOKEN-123"));
+    console.log(`Download verified in real DevTools: ${downloaded[0]}`);
+  } else {
+    throw new Error("The report download did not reach the downloads folder");
+  }
+  rmSync(downloads, { recursive: true, force: true });
+
+  // Hand-off to the Sources panel (initiator).
+  await pick("/api/created");
+  const hasSource = await panel.evaluate(`Boolean(document.getElementById("open-source"))`);
+  assert.ok(hasSource, "Open in Sources offered for a script-initiated request");
+  await panel.evaluate(`document.getElementById("open-source").click()`);
+  await sleep(800);
+  const afterSource = await devtools.evaluate(`(async () => (await import("./ui/legacy/legacy.js")).InspectorView.InspectorView.instance().tabbedPane.selectedTabId)()`);
+  assert.equal(afterSource, "sources", "Open in Sources switches to the Sources panel");
+  await devtools.evaluate(`(async () => { const v = (await import("./ui/legacy/legacy.js")).InspectorView.InspectorView.instance(); await v.showPanel(${JSON.stringify(opened)}); })()`);
+  await sleep(300);
 
   // Hand-off to the native Network panel.
   await pick("/api/error");
@@ -137,6 +212,9 @@ try {
   if (hasButton) {
     await panel.evaluate(`document.getElementById("open-network").click()`);
     await sleep(500);
+    const filterText = await devtools.evaluate(`(() => { const walk = (r) => { for (const el of r.querySelectorAll("input")) { if (el.getAttribute("aria-label")?.toLowerCase().includes("filter") && el.value) return el.value; } for (const el of r.querySelectorAll("*")) if (el.shadowRoot) { const v = walk(el.shadowRoot); if (v) return v; } return null; }; return walk(document); })()`);
+    console.log(`Network panel filter after hand-off: ${JSON.stringify(filterText)}`);
+    if (filterText !== null) assert.ok(!filterText.includes("?"), "Network filter receives the path only");
     const selected = await devtools.evaluate(`(async () => (await import("./ui/legacy/legacy.js")).InspectorView.InspectorView.instance().tabbedPane.selectedTabId)()`);
     assert.equal(selected, "network", "Show in Network panel switches to the native Network panel");
   } else {

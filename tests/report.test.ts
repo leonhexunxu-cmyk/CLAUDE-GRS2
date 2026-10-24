@@ -29,3 +29,44 @@ test("redirect targets are redacted too", () => {
   const text = buildReport(req, { capture: "complete" });
   assert.match(text, /Redirect:\s+https:\/\/a\.test\/cb\?code=\[REDACTED\]/);
 });
+
+test("headers, cookies, auth and bodies present in the HAR never reach any report", async () => {
+  const { buildTechnicalReport } = await import("../src/report.js");
+  const raw = harEntry({ url: "https://api.test/me?session=SUPERSECRET" }) as Record<string, any>;
+  raw.request.headers = [{ name: "Authorization", value: "Bearer AUTHSECRET" }, { name: "Cookie", value: "sid=COOKIESECRET" }];
+  raw.request.cookies = [{ name: "sid", value: "COOKIESECRET" }];
+  raw.request.postData = { mimeType: "application/json", text: "{\"password\":\"BODYSECRET\"}" };
+  raw.response.headers = [{ name: "Set-Cookie", value: "sid=COOKIESECRET" }];
+  raw.response.content.text = "RESPONSEBODYSECRET";
+  const req = normalizeEntry(raw, 1);
+  const outputs = [
+    buildReport(req, { capture: "complete" }),
+    buildTechnicalReport([req], { capture: "complete", generatedAt: new Date(0), scope: "selected request" }, "md").content,
+    buildTechnicalReport([req, req], { capture: "complete", generatedAt: new Date(0), scope: "all visible" }, "json").content,
+  ];
+  for (const out of outputs) {
+    for (const secret of ["SUPERSECRET", "AUTHSECRET", "COOKIESECRET", "BODYSECRET", "RESPONSEBODYSECRET", "Authorization", "Set-Cookie"]) {
+      assert.ok(!out.includes(secret), `${secret} leaked`);
+    }
+  }
+});
+
+test("technical reports: names, formats and problem detail", async () => {
+  const { buildTechnicalReport } = await import("../src/report.js");
+  const reqs = [
+    normalizeEntry(harEntry({ url: "https://a.test/ok", started: "2026-10-24T12:00:00.000Z" }), 1),
+    normalizeEntry(harEntry({ url: "https://a.test/boom", status: 500, statusText: "Internal Server Error", started: "2026-10-24T12:00:01.000Z" }), 2),
+  ];
+  const ctx = { capture: "partial" as const, generatedAt: new Date("2026-10-24T12:00:00Z"), scope: "all visible (2)" };
+  const md = buildTechnicalReport(reqs, ctx, "md");
+  assert.equal(md.filename, "quick-debug-report-2026-10-24T12-00-00.md");
+  assert.match(md.content, /\| 2 \| 1 \| 0 \| 1 \| 0 \| 0 \|/);
+  assert.match(md.content, /### GET https:\/\/a\.test\/boom/);
+  assert.match(md.content, /Likely source: The server/);
+  assert.doesNotMatch(md.content, /### GET https:\/\/a\.test\/ok/);
+  const json = JSON.parse(buildTechnicalReport(reqs, ctx, "json").content);
+  assert.equal(json.requests.length, 2);
+  assert.equal(json.capture, "partial");
+  assert.equal(json.requests[1].statusHelp.title, "Internal Server Error");
+  assert.equal(json.requests[0].timingsMs.dns, null);
+});

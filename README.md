@@ -20,28 +20,51 @@ Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpack
 | Task | How | Clicks |
 |---|---|---|
 | See only problems (no response, 4xx/5xx, slow) | **Problems** | 1 |
-| See requests with no response, HTTP errors, redirects or slow requests | the matching button in the toolbar | 1 |
-| Search by URL, method, status, type or error text | type in the search box (`/` focuses it) | 1 |
-| Filter by resource type | type picker | 2 |
-| Inspect a request | click its row | 1 |
-| Copy a redacted diagnostic report | row → **Copy report** (or press `c`) | 2 |
-| Copy the full, unredacted URL | row → **Copy URL** | 2 |
-| Jump to the native Network panel, filtered to this request | row → **Show in Network panel** | 2 |
-| Capture everything from page start | **Reload page to capture everything** (shown when the capture may be partial) | 1 |
-| Clear the list (doesn't affect the Network panel) | **Clear** | 1 |
+| See requests with no response, HTTP errors, redirects or slow requests | the toolbar button (narrow panels: **Filters ▾** → item) | 1 (2) |
+| Search URL, method, status, type or error | search box (`/` focuses it) | 1 |
+| Filter by resource type | type picker (narrow: **Filters ▾** → picker) | 2 (3) |
+| Inspect a request: status, analysis, timing, masked URL | click its row | 1 |
+| What does this status/error mean? | row → **?** | 2 |
+| Show the original URL (masked by default) | row → **Reveal** | 2 |
+| Copy a redacted report | row → **Copy report** (or `c`) | 2 |
+| Download a technical report (Markdown) | row → **Download** | 2 |
+| Download a report of all visible requests | **⋯** → Download Markdown / JSON | 2 |
+| Open the script that made the request | row → **Open in Sources** | 2 |
+| Jump to the native Network panel | row → **Network panel** | 2 |
+| Light / dark / automatic theme | **⋯** → Theme | 2 |
+| Run a command | click the console (or `` ` ``), type, Enter | 1 |
+| Capture everything from page start | **Reload to capture everything** | 1 |
+| Clear the list (Network panel unaffected) | **Clear** | 1 |
 
-Keyboard: `↑`/`↓` (or `j`/`k`), `Home` and `End` move through the list. `Esc` closes the details or clears the search. `/` focuses search, and `c` copies the report for the selected request.
+Keyboard: `↑`/`↓` (or `j`/`k`), `Home` and `End` move through the list. `Esc` closes menus and details or clears the search. `/` focuses search, `` ` `` focuses the console and `c` copies the report.
 
-The request list stays visible while details are open, and a selected request keeps its details open even if a filter hides its row.
+### Analysis
 
-### What counts as a problem
+Selecting a request shows what the captured data supports:
 
-| Label | Meaning |
-|---|---|
-| **No response** | Chrome got no HTTP response. The request may have failed, been blocked or been cancelled. Chrome's error text (e.g. `net::ERR_EMPTY_RESPONSE`) is shown when available. |
-| **HTTP error** | The server answered with 4xx or 5xx. This can still be expected behaviour, such as a 401 before login. |
-| **Slow** | It took 1 second or longer in total. |
-| **Redirect** | 301, 302, 303, 307 or 308. A 304 Not Modified counts as a success because the cached copy was used. |
+- the **likely source** (request, server, network, DNS, TLS, browser or extension), based on the status or Chrome's `net::ERR_*` code
+- **where the time went** when one phase dominates (e.g. waiting for the first byte, or downloading)
+- **what started the request** (parser, script, preload…), with a jump to the line in Sources
+
+Nothing is guessed: phases DevTools didn't report are listed as such, and inconsistent timing data is shown and flagged.
+
+### Console
+
+A small command line at the bottom. It isn't a shell: it runs only these commands, and rejects anything else with an explanation.
+
+`/help` · `/show all|problems|failed|errors|redirects|slow` · `/type <type>` · `/search [text]` · `/slowest [n]` · `/reset` · `/select <row>` · `/copy` · `/download [md|json] [all]` · `/explain <status|net::ERR_…>` · `/theme auto|light|dark` · `/pin <command>` · `/unpin <command>` · `/pins` · `/reset-usage` · `/clear` · `/cls` · `/spooky`
+
+Pinned commands (up to 4) appear as one-click shortcuts. When nothing is pinned, up to two frequently used commands are suggested. Suggestions are computed when the panel opens, so they never move while you work.
+
+### Adaptive layout
+
+- **Wide panels** show every filter inline.
+- **Below 760 px** the secondary filters move into **Filters ▾**, whose label shows any active hidden filter, and details stack under the list.
+- **Below 560 px** the Method and Type columns and the shortcuts hide. Type stays visible in the details, and every command is still available.
+
+### Halloween mode (through Nov 1, 2026)
+
+Until **November 1, 2026 inclusive** (your local date), the accent turns purple, the console prompt turns orange, and a tiny spiderweb sits in the console corner. Status colours don't change. `/spooky` sends a small ghost across its own lane in the console log once, about 2.6 s, then removes it. With reduced motion it shows a still ghost instead. From November 2 everything returns to normal automatically, and `/spooky` reports that the season is over.
 
 ## How capture works
 
@@ -74,7 +97,12 @@ npm run testpages      # controlled test page on http://127.0.0.1:8787/
 ```
 extension/   manifest.json, devtools.html, panel.html, panel.css (copied to dist/)
 src/
-  model.ts     HAR entry → NormalizedRequest (missing values stay null)
+  model.ts     HAR entry → NormalizedRequest (missing values stay null; timing consistency check)
+  explain.ts   status / net::ERR explanations and rule-based analysis
+  commands.ts  console command allowlist and parser
+  prefs.ts     local theme, pins and usage counts
+  season.ts    Halloween date window
+  spooky.ts    /spooky animation (isolated)
   filter.ts    status views, type and text filters, summary counts
   redact.ts    URL redaction for reports
   report.ts    diagnostic report text
@@ -85,9 +113,9 @@ src/
   devtools.ts  registers the panel
 test-pages/  server producing successes, 4xx/5xx, dropped and blocked requests, redirects, a slow response
 tests/       unit tests, UI test, real-DevTools integration test
-docs/        use cases, privacy, test report
+docs/        use cases, research, privacy, test report
 ```
 
 ## Status
 
-This is the MVP described in the implementation plan: steps 1–6 are done and step 7 is partly done (performance measured). The small beta (step 7) and the expansion decision (step 8) need real users, so they haven't started. See [docs/test-report.md](docs/test-report.md) for what has been verified and what hasn't.
+This is the MVP described in the implementation plan: steps 1–6 are done and step 7 is partly done (performance measured). The small beta (step 7) and the expansion decision (step 8) need real users, so they haven't started. See [docs/test-report.md](docs/test-report.md) for what has been verified and what hasn't, and [docs/research.md](docs/research.md) for the evidence behind the phase-2 features.

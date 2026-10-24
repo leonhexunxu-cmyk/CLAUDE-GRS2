@@ -33,3 +33,17 @@ test("unparseable, missing and data URLs never pass through raw", () => {
   assert.equal(redactUrl(null).url, "(not available)");
   assert.equal(redactUrl("data:text/plain;base64,c2VjcmV0").url, "data: URL (content omitted)");
 });
+
+test("non-sensitive parameters, order and encoding are preserved", () => {
+  const url = "https://shop.test/search?q=red%20shoes&page=2&sort=price&lang=en#reviews";
+  assert.deepEqual(redactUrl(url), { url, redactions: 0 });
+  const mixed = redactUrl("https://shop.test/a?q=x&session=SUPERSECRET&page=1");
+  assert.equal(mixed.url, `https://shop.test/a?q=x&session=${REDACTED}&page=1`);
+});
+
+test("redaction never mutates the captured value", () => {
+  const original = "https://api.test/v1?access_token=abc";
+  const captured = { url: original };
+  redactUrl(captured.url);
+  assert.equal(captured.url, original);
+});

@@ -63,3 +63,78 @@ Background reconcile: `getHAR` runs every 2 s while the panel is visible. The in
 - **Requests from an old page that finish after a navigation** can appear in the new list through `onRequestFinished`.
 - **Service-worker, WebSocket and very long-lived requests.** These aren't in the test page. Requests that never finish are not shown (open the Network panel for those).
 - **Firefox** has not been evaluated (plan step 8).
+
+---
+
+# Phase 2: review fixes, research features, console, adaptive UI, Halloween mode
+
+Environment as above (Chromium 153.0.8010.12, Linux/Xvfb, Node 22). The changes are **not committed**; they are left in the working tree for review.
+
+## Results
+
+| Suite | Result |
+|---|---|
+| `npm run typecheck` | pass (strict, src + tests) |
+| `npm test` (unit) | **64/64 pass**: timing, explanations, season dates, prefs, command parser, redaction/privacy, reports, store/capture, filters |
+| `npm run test:ui` (mock `chrome.devtools`, Chromium) | pass: 38 feature paths audited in wide and narrow layouts, max **3** clicks |
+| `test:integration` (real extension in real DevTools) | pass, 2 consecutive runs |
+
+## Review findings and what was done
+
+**1. Privacy.** The inspector showed `session=SUPERSECRET`, and Copy URL copied it.
+- Fixed: URLs are masked in the list, tooltips, details, initiator location and console output. Reveal is a deliberate, per-request action. Copy URL copies the masked URL unless Reveal is on, in which case it is labelled "Copy original URL".
+- Search matches the masked URL.
+- The Network-panel hand-off passes the path only.
+- Tests cover the reports and the UI:
+  - Reports: cookies, auth headers and request/response bodies present in the HAR never appear in any report.
+  - UI: no secret appears anywhere in the list or details DOM, localStorage holds no request data, and the captured URL is unchanged.
+
+**2. Timing.** The reported "total 24 ms, wait 25 ms, receive 3 ms".
+- **Source:** the UI test's fake HAR entries, which computed `wait` independently of `time`. It was not browser data.
+- **Verification:** every real Chrome entry on the test page satisfies `time = blocked + dns + connect + send + wait + receive`, counting only reported phases (−1 = not reported) and excluding `ssl`. The real-DevTools test asserts this for all 17 requests.
+- **Real bug found and fixed:** the timing bar summed `ssl` on top of `connect`. HAR 1.2 includes `ssl` inside `connect`, so this double-counted TLS. The bar now splits connect into TCP and TLS, and the list labels it "connect (incl. ssl)".
+- **Inconsistent data is now flagged, not hidden:** both numbers are shown with a note.
+- **Missing phases** are listed as "Not reported by DevTools".
+- **Failed requests:** Chrome reports 0 for phases that never happened, and the analysis explains this instead of implying a 0 ms server.
+- The fake data was fixed to be consistent.
+
+**3. Interaction.** The click audit runs in both layouts. Filter counts are checked against the row classifications, and against `getHAR` in real DevTools.
+
+## Verified in real DevTools (not only the mock)
+
+These were exercised in real DevTools:
+
+- capture parity with `getHAR`: 17/17 requests, masked URLs and times
+- timing consistency for every entry
+- status help (503) and real initiators (`run` in `app.js:9`)
+- likely-source analysis for a dropped connection and a blocked port
+- the console allowlist rejecting `ls -la`, plus `/explain` and `/spooky`, with no animation left after completion
+- **Download:** the Markdown file lands in the downloads folder with the token redacted
+- **Open in Sources:** switches to the Sources panel
+- **Show in Network panel:** switches to Network
+
+## Verified only in the mock UI test
+
+- That the Network filter receives the path only. In real DevTools the test could not locate the filter box (it read `null`), so the value it receives is unverified there.
+- `openResource` line numbers. The panel passes Chrome's 0-based `lineNumber`; that the editor scrolls to the right line was not checked.
+- Reduced-motion behaviour, the season boundaries (Nov 1 23:30 on, Nov 2 00:00 off) and narrow/wide layouts. These used Playwright's fixed clock and media emulation.
+- Theme switching and clipboard contents.
+
+## Performance (5,000 requests, `test:ui`)
+
+| Measure | Result |
+|---|---|
+| Ingest + paint | ~410 ms (one burst) |
+| Switch to Problems, incl. two frames | ~30 ms |
+| Switch back to All, incl. two frames | ~95 ms (re-attaching 5,000 cached rows) |
+| JS heap after GC | ~7 MB (was ~5 MB; the masked URL is now stored per request) |
+
+The filter timings now include two animation frames. The phase-1 figures measured DOM updates only, so the two are not directly comparable. Halloween styling is CSS only. `/spooky` uses one Web Animation of about 2.6 s on a single 18 px SVG, then removes it.
+
+## Remaining limitations
+
+- Redaction is pattern-based and can miss secrets with innocuous names and short values.
+- "Likely source" is a rule-based reading of status and error codes, not a diagnosis. A 4xx is attributed to "the request as sent", even though the cause can be server configuration.
+- Downloads were verified in Chromium 153 only. The Network hand-off needs `chrome.devtools.panels.network.show`, and the button is hidden without it.
+- Usage-based suggestions are shown only for commands without arguments and are fixed for the session, so they never move while in use.
+- No usability study with real developers yet (plan step 7).

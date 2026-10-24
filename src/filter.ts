@@ -32,7 +32,8 @@ export function matchesStatus(req: NormalizedRequest, view: StatusView): boolean
 }
 
 function haystack(req: NormalizedRequest): string {
-  return [req.method, req.url, req.status, req.statusText, req.resourceType, req.errorText, req.mimeType]
+  // The masked URL: searching never matches values the user cannot see.
+  return [req.method, req.maskedUrl, req.status, req.statusText, req.resourceType, req.errorText, req.mimeType]
     .filter((v) => v !== null && v !== undefined)
     .join(" ")
     .toLowerCase();

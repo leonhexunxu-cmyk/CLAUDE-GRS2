@@ -4,6 +4,7 @@
 //
 // Rule: a value that DevTools did not give us stays `null`. We never fill a gap
 // with a guessed number.
+import { redactUrl } from "./redact.js";
 
 /** Shape of the HAR fields we read. Everything is optional because real captures are often partial. */
 export interface HarEntryLike {
@@ -20,14 +21,49 @@ export interface HarEntryLike {
     _transferSize?: number;
     _error?: string | null;
   };
-  timings?: Partial<Record<TimingPhase, number>>;
+  timings?: Partial<Record<TimingPhase, number>> & { _blocked_queueing?: number };
   serverIPAddress?: string;
   _resourceType?: string;
   _fromCache?: string;
+  _initiator?: {
+    type?: string;
+    url?: string;
+    lineNumber?: number;
+    columnNumber?: number;
+    stack?: { callFrames?: Array<{ functionName?: string; url?: string; lineNumber?: number; columnNumber?: number }> };
+  };
 }
 
 export const TIMING_PHASES = ["blocked", "dns", "connect", "ssl", "send", "wait", "receive"] as const;
 export type TimingPhase = (typeof TIMING_PHASES)[number];
+
+/**
+ * Phases that add up to the total. Per HAR 1.2, `ssl` is already included in
+ * `connect`, so it is excluded here. Verified against Chrome: `time` equals the
+ * sum of these phases (ignoring -1) for every entry of the test page.
+ */
+export const ADDITIVE_PHASES = ["blocked", "dns", "connect", "send", "wait", "receive"] as const;
+
+/** Allowed difference between the reported total and the phase sum before we flag it. */
+export const TIMING_TOLERANCE_MS = 1;
+
+export interface TimingCheck {
+  /** Sum of the reported additive phases, or null if none were reported. */
+  phaseSum: number | null;
+  /** True/false when both the total and the phases are known; null otherwise. */
+  consistent: boolean | null;
+}
+
+/** What started the request, from Chrome's `_initiator` (not part of standard HAR). */
+export interface Initiator {
+  type: string;
+  /** Script or document that issued the request (top stack frame for scripts). */
+  url: string | null;
+  /** 0-based, as reported by Chrome. */
+  lineNumber: number | null;
+  columnNumber: number | null;
+  functionName: string | null;
+}
 
 /**
  * How the request ended, as far as the captured data shows.
@@ -47,6 +83,8 @@ export interface NormalizedRequest {
   id: number;
   method: string | null;
   url: string | null;
+  /** `url` with sensitive values replaced by [REDACTED]: what the UI shows and searches by default. */
+  maskedUrl: string | null;
   /** Last path segment (or host) used as the short display name. */
   name: string;
   host: string | null;
@@ -68,6 +106,10 @@ export interface NormalizedRequest {
   durationMs: number | null;
   /** Per-phase timings in ms; null where HAR reports -1 or omits the phase. */
   timings: Record<TimingPhase, number | null>;
+  /** Chrome's `_blocked_queueing`: the part of `blocked` spent queued in the browser. */
+  queueingMs: number | null;
+  timingCheck: TimingCheck;
+  initiator: Initiator | null;
   transferSize: number | null;
   fromCache: string | null;
   serverIp: string | null;
@@ -136,7 +178,7 @@ function inferTypeFromMime(mime: string | null): string | null {
   return null;
 }
 
-function displayName(url: string | null): { name: string; host: string | null } {
+export function displayName(url: string | null): { name: string; host: string | null } {
   if (!url) return { name: "(no URL)", host: null };
   try {
     const parsed = new URL(url);
@@ -147,6 +189,21 @@ function displayName(url: string | null): { name: string; host: string | null } 
   } catch {
     return { name: url, host: null };
   }
+}
+
+function parseInitiator(raw: HarEntryLike["_initiator"]): Initiator | null {
+  if (!raw || typeof raw !== "object") return null;
+  const type = str(raw.type);
+  if (!type) return null;
+  // For scripts, the first stack frame with a URL is the code that issued the request.
+  const frame = raw.stack?.callFrames?.find((f) => str(f?.url));
+  return {
+    type,
+    url: str(frame?.url) ?? str(raw.url),
+    lineNumber: frame ? num(frame.lineNumber) : num(raw.lineNumber),
+    columnNumber: frame ? num(frame.columnNumber) : num(raw.columnNumber),
+    functionName: str(frame?.functionName),
+  };
 }
 
 function parseTime(value: unknown): number | null {
@@ -188,12 +245,19 @@ export function normalizeEntry(raw: unknown, id: number): NormalizedRequest {
   for (const phase of TIMING_PHASES) timings[phase] = num(entry.timings?.[phase]);
 
   const durationMs = num(entry.time);
+  const known = ADDITIVE_PHASES.map((p) => timings[p]).filter((v): v is number => v !== null);
+  const phaseSum = known.length ? known.reduce((a, b) => a + b, 0) : null;
+  const timingCheck: TimingCheck = {
+    phaseSum,
+    consistent: phaseSum === null || durationMs === null ? null : Math.abs(phaseSum - durationMs) <= Math.max(TIMING_TOLERANCE_MS, durationMs * 0.02),
+  };
   const { name, host } = displayName(url);
 
   return {
     id,
     method: str(request.method)?.toUpperCase() ?? null,
     url,
+    maskedUrl: url === null ? null : redactUrl(url).url,
     name,
     host,
     status,
@@ -208,6 +272,9 @@ export function normalizeEntry(raw: unknown, id: number): NormalizedRequest {
     startedMs: parseTime(entry.startedDateTime),
     durationMs,
     timings,
+    queueingMs: num(entry.timings?._blocked_queueing),
+    timingCheck,
+    initiator: parseInitiator(entry._initiator),
     transferSize: num(response._transferSize),
     fromCache: str(entry._fromCache),
     serverIp: str(entry.serverIPAddress),
