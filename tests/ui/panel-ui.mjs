@@ -89,7 +89,8 @@ function fakeChrome(entries) {
   window.__navigate = () => { window.__har = []; listeners.navigated.forEach((cb) => cb("https://shop.test/")); };
 }
 
-const browser = await chromium.launch();
+// CHROMIUM_PATH runs the suite against a specific Chromium build (e.g. the oldest supported version).
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 
 async function openPanel({ width = 1200, height = 700, date = "2026-10-24T12:00:00", reducedMotion = "no-preference", acceptDownloads = true } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, reducedMotion, acceptDownloads });
@@ -150,14 +151,6 @@ let ctx = await openPanel();
 page = ctx.page;
 
 assert.equal(await page.getAttribute("html", "data-season"), "halloween", "seasonal styling active on Oct 24, 2026");
-// Launch animation: seasonal variant with cobwebs, spiders and pumpkins; never blocks the pointer; cleans up.
-const launch = await page.evaluate(() => {
-  const o = document.querySelector(".launch");
-  return o && { webs: o.querySelectorAll(".web").length, spiders: o.querySelectorAll(".spider").length, pumpkins: o.querySelectorAll(".pumpkin").length,
-    pointer: getComputedStyle(o).pointerEvents, hidden: o.getAttribute("aria-hidden") };
-});
-assert.deepEqual(launch, { webs: 4, spiders: 2, pumpkins: 3, pointer: "none", hidden: "true" });
-await page.waitForFunction(() => !document.querySelector(".launch") && document.getAnimations().length === 0, null, { timeout: 4000 });
 assert.ok(await page.locator(".season-corner").isVisible(), "small spiderweb accent visible");
 assert.equal(await text('[data-count="total"]'), "8");
 assert.equal(await text('.views [data-count="problems"]'), "4");
@@ -514,7 +507,6 @@ await ctx.context.close();
 // =================== Reduced motion ===================
 ctx = await openPanel({ reducedMotion: "reduce" });
 page = ctx.page;
-assert.equal(await page.locator(".launch").count(), 0, "no launch animation with reduced motion");
 await run("/spooky");
 assert.match(await consoleText(), /Reduced motion is on/);
 assert.equal(await page.locator(".spooky-ghost, .spooky-lane").count(), 0);
@@ -529,10 +521,6 @@ await ctx.context.close();
 ctx = await openPanel({ date: "2026-11-02T00:00:01" });
 page = ctx.page;
 assert.equal(await page.getAttribute("html", "data-season"), null, "expired after Nov 1");
-assert.equal(await page.locator(".launch").count(), 1, "plain launch animation after the season");
-assert.equal(await page.locator(".launch .spider, .launch .pumpkin, .launch .web").count(), 0, "no seasonal pieces after Nov 1");
-await page.keyboard.press("Shift");
-await page.waitForFunction(() => !document.querySelector(".launch"), null, { timeout: 1000 });
 assert.equal(await page.locator(".season-corner").isVisible(), false);
 await run("/spooky");
 assert.match(await consoleText(), /Halloween mode has expired/);

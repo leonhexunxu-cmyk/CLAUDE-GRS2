@@ -64,6 +64,7 @@ export function startCapture(store: RequestStore, api: NetworkApi, options: Capt
       // A navigation or Clear while getHAR was running makes this answer stale.
       if (generation === store.generation && !stopped) {
         const entries = Array.isArray(log?.entries) ? log.entries : [];
+        store.applyLogOrder(entries);
         store.add(entries.filter((e) => !isUnfinished(e)));
       }
       if (again) {

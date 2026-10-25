@@ -10,17 +10,18 @@ export type StoreChange =
   | { kind: "reset" }
   | { kind: "capture" };
 
-/** Order like the native Network panel: by start time; unknown start times last; ties by arrival. */
-function before(a: NormalizedRequest, b: NormalizedRequest): boolean {
-  const ta = a.startedMs ?? Infinity;
-  const tb = b.startedMs ?? Infinity;
-  return ta < tb || (ta === tb && a.id < b.id);
-}
 
 export class RequestStore {
   private items: NormalizedRequest[] = [];
   private byId = new Map<number, NormalizedRequest>();
   private keys = new Set<string>();
+  private keyOf = new Map<number, string>();
+  /**
+   * Position of each request in DevTools' own log (from getHAR). HAR start times
+   * have millisecond precision, so requests started in the same millisecond tie;
+   * the log position breaks the tie the way the native Network panel orders them.
+   */
+  private logIndex = new Map<string, number>();
   private nextId = 1;
   private listeners = new Set<StoreListener>();
   /** "partial" until we observe a navigation while capturing. */
@@ -41,6 +42,30 @@ export class RequestStore {
     return this.nextId - 1;
   }
 
+  /** Order like the native Network panel: start time, then DevTools log position, then arrival; unknown start times last. */
+  private before(a: NormalizedRequest, b: NormalizedRequest): boolean {
+    const ta = a.startedMs ?? Infinity;
+    const tb = b.startedMs ?? Infinity;
+    if (ta !== tb) return ta < tb;
+    const la = this.logIndex.get(this.keyOf.get(a.id) ?? "");
+    const lb = this.logIndex.get(this.keyOf.get(b.id) ?? "");
+    if (la !== undefined && lb !== undefined && la !== lb) return la < lb;
+    return a.id < b.id;
+  }
+
+  /**
+   * Record the order of DevTools' full request log (the entries of one getHAR
+   * call, in order). Re-sorts and notifies listeners if that changes the order of
+   * requests already shown.
+   */
+  applyLogOrder(log: readonly unknown[]): void {
+    log.forEach((raw, i) => this.logIndex.set(entryKey(raw), i));
+    const sorted = this.items.every((item, i) => i === 0 || !this.before(item, this.items[i - 1]!));
+    if (sorted) return;
+    this.items = [...this.items].sort((a, b) => (this.before(a, b) ? -1 : this.before(b, a) ? 1 : 0));
+    this.emit({ kind: "added", requests: [], appended: false });
+  }
+
   /** Add raw HAR entries; duplicates (same start time, method, URL and duration) are ignored. */
   add(entries: readonly unknown[]): NormalizedRequest[] {
     const added: NormalizedRequest[] = [];
@@ -52,7 +77,8 @@ export class RequestStore {
       const req = normalizeEntry(raw, this.nextId++);
       // Requests usually arrive roughly in order, so scan back from the end.
       let pos = this.items.length;
-      while (pos > 0 && before(req, this.items[pos - 1]!)) pos--;
+      this.keyOf.set(req.id, key);
+      while (pos > 0 && this.before(req, this.items[pos - 1]!)) pos--;
       if (pos < this.items.length) appended = false;
       this.items.splice(pos, 0, req);
       this.byId.set(req.id, req);
@@ -69,6 +95,7 @@ export class RequestStore {
   clear(): void {
     this.items = [];
     this.byId.clear();
+    this.keyOf.clear();
     this.generation++;
     this.emit({ kind: "reset" });
   }
@@ -82,6 +109,8 @@ export class RequestStore {
     this.items = [];
     this.byId.clear();
     this.keys.clear();
+    this.keyOf.clear();
+    this.logIndex.clear();
     this.generation++;
     this.capture = "complete";
     this.emit({ kind: "reset" });

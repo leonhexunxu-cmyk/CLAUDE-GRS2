@@ -37,11 +37,12 @@ It **never** contains request or response headers, cookies, request or response 
 Applied to the request URL and the redirect target in every report:
 
 - `user:password@` credentials are removed.
-- Query and fragment parameters are replaced with `[REDACTED]` when the **name** looks sensitive. That means names containing any of: token, secret, passw, pwd, auth, session, sess, sid, key, sig, code, credential, jwt, bearer, otp, nonce, state, cookie, email, phone, ssn, card, account, login, user, pass.
-- Parameter values and path segments that look like a JWT (`eyJ…`) or an opaque token (32+ URL-safe characters) are redacted whatever the parameter name.
+- **Query and fragment values are hidden by default.** A value is shown only when its parameter name is on a short allowlist of harmless names (pagination, sorting, language, format, view and UTM campaign names, such as `page`, `limit`, `offset`, `sort`, `order`, `lang`, `locale`, `format`, `v`, `view`, `tab`). The value must also be short and plain: up to 40 letters, digits or `_.,:-`. Free text such as `q=`, IDs, and any unknown name such as `t=` are hidden. Parameter names stay visible.
+- Names that look sensitive are always hidden, even if allowlisted. That means names containing any of: token, secret, passw, pwd, pw, auth, session, sess, sid, key, sig, code, credential, jwt, bearer, otp, nonce, state, cookie, email, phone, ssn, card, account, login, user, pass.
+- Parameter values and path segments that look like a JWT (`eyJ…`), an opaque token (32+ URL-safe characters) or an email address are redacted whatever the parameter name.
 - `data:` and `blob:` URLs are replaced by a placeholder, and unparseable URLs are replaced entirely.
 
-The rules lean towards over-redaction (e.g. `country_code` is redacted too). A report that hides a harmless value is acceptable; one that leaks a token is not. Redaction is pattern-based, so it can't promise to catch every secret. Review a report before sharing it outside your team.
+The rules lean towards over-redaction: a report that hides a harmless value is acceptable, one that leaks a token is not. Query values are covered by the default-deny rule. Path segments are kept for debugging, so a secret of ordinary length placed directly in a path segment is not detected. Review a report before sharing it outside your team.
 
 ## In the inspector (display masking)
 

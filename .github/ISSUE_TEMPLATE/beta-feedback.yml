@@ -1,0 +1,39 @@
+name: Beta feedback
+description: Report results from the Quick Debug beta tasks, a defect, or friction.
+labels: ["beta-feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. **Do not paste unredacted URLs, headers, cookies or tokens.** Use "Copy report" (redacted) and re-read it before posting.
+  - type: input
+    id: chrome
+    attributes:
+      label: Chrome version and OS
+      placeholder: "e.g. Chrome 153 on macOS 15"
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Task results (time and clicks, Quick Debug vs. native Network panel)
+      description: See docs/beta-testing.md for the five tasks. Approximate numbers are fine.
+      placeholder: |
+        1. Find failed requests: QD 5 s / 1 click; native 25 s / 4 clicks
+        2. ...
+  - type: textarea
+    id: wrong
+    attributes:
+      label: Anything wrong or misleading?
+      description: Wrong counts, explanations, missing requests, values that differ from the Network panel.
+  - type: textarea
+    id: friction
+    attributes:
+      label: Anything confusing or hard to find?
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed or redacted any secrets before posting.
+          required: true

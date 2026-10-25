@@ -2,15 +2,17 @@
 
 A focused Chrome DevTools panel for finding and understanding network-request problems. It adds a compact view of what the page requested, what went wrong, and a redacted report you can paste into a bug ticket. It works alongside the native Network panel and does not replace it.
 
-- **Local only.** No backend, no telemetry, and no extension permissions. The extension pages' content security policy blocks all network connections (`connect-src 'none'`).
+- **Local only.** No backend, no telemetry, and no extension permissions. The extension pages' content security policy blocks all network connections from its code (`connect-src 'none'`). The only outbound link is the optional **Reference (MDN)** link in the status help, which opens in a new tab when you click it.
 - **Plain TypeScript, HTML and CSS.** No UI framework and no runtime dependencies.
 - **Honest data.** A value DevTools didn't report is shown as `n/a`, never guessed. An HTTP 4xx/5xx is described as a server response, not as a confirmed bug.
 
 ## Install (unpacked)
 
+Requires Node.js 22 (the version CI uses).
+
 ```
-npm install
-npm run build          # outputs the extension to dist/
+npm ci
+npm run build          # outputs the unpacked extension to dist/ (about 160 KB, no external files)
 ```
 
 Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose `dist/`. Open DevTools on any page and select the **Quick Debug** tab. It may be under the `»` overflow menu.
@@ -64,8 +66,6 @@ Pinned commands (up to 4) appear as one-click shortcuts. When nothing is pinned,
 
 ### Halloween mode (through Nov 1, 2026)
 
-When the panel opens, a short launch animation (about 1.4 s) draws the Quick Debug logo. It never blocks the panel: clicks pass through, any key or click skips it, and it is not shown when the system prefers reduced motion. Through Nov 1 it is a little longer (about 2 s) and adds cobwebs in the corners, two spiders dropping on their threads and a row of pumpkins.
-
 Until **November 1, 2026 inclusive** (your local date), the accent turns purple, the console prompt turns orange, and a tiny spiderweb sits in the console corner. Status colours don't change. `/spooky` sends a small ghost across its own lane in the console log once, about 2.6 s, then removes it. With reduced motion it shows a still ghost instead. From November 2 everything returns to normal automatically, and `/spooky` reports that the season is over.
 
 ## How capture works
@@ -90,14 +90,18 @@ npm test               # unit tests (Node test runner): model, filters, redactio
 npm run test:ui        # built panel in Chromium with a fake chrome.devtools; click-depth audit; 5,000-request timing
 npm run test:integration   # real Chromium DevTools against the test page (needs a display, e.g. xvfb-run -a)
 npm run testpages      # controlled test page on http://127.0.0.1:8787/
+node scripts/make-icons.mjs   # re-render extension/icons/*.png from assets/icon.svg
 ```
 
-`test:ui` and `test:integration` need [Playwright](https://playwright.dev) with Chromium available (`npm i --no-save playwright && npx playwright install chromium`). It is a test tool only, not a project dependency.
+Set `CHROMIUM_PATH=/path/to/chrome` to run `test:ui` or `test:integration` against a specific Chromium build. CI uses this to test Chromium 110, the declared minimum.
+
+`test:ui` and `test:integration` need [Playwright](https://playwright.dev) with Chromium available (`npm i --no-save playwright@1.64.1 && npx playwright install chromium`, the version CI pins). It is a test tool only, not a project dependency.
 
 ### Layout
 
 ```
-extension/   manifest.json, devtools.html, panel.html, panel.css (copied to dist/)
+extension/   manifest.json, devtools.html, panel.html, panel.css, icons/ (copied to dist/)
+assets/      icon.svg (icon source; not shipped)
 src/
   model.ts     HAR entry → NormalizedRequest (missing values stay null; timing consistency check)
   explain.ts   status / net::ERR explanations and rule-based analysis
@@ -105,12 +109,11 @@ src/
   prefs.ts     local theme, pins and usage counts
   season.ts    Halloween date window
   spooky.ts    /spooky animation (isolated)
-  launch.ts    launch animation (seasonal variant through Nov 1)
   filter.ts    status views, type and text filters, summary counts
-  redact.ts    URL redaction for reports
+  redact.ts    URL redaction (reports, downloads and on-screen masking)
   report.ts    diagnostic report text
   format.ts    display helpers
-  store.ts     in-memory request store, ordered by start time, de-duplicated
+  store.ts     in-memory request store, ordered like the Network panel (start time, then DevTools log order), de-duplicated
   capture.ts   chrome.devtools.network → store (getHAR reconcile + live events)
   panel.ts     the panel UI (plain DOM)
   devtools.ts  registers the panel
@@ -118,6 +121,20 @@ test-pages/  server producing successes, 4xx/5xx, dropped and blocked requests, 
 tests/       unit tests, UI test, real-DevTools integration test
 docs/        use cases, research, privacy, test report
 ```
+
+## Beta limitations
+
+- **Distribution:** unpacked, for testers only. It is not on the Chrome Web Store. The icon set (16–128 px) is in place; a store listing would still need screenshots, a privacy disclosure and a review. Beta testers: see [docs/beta-testing.md](docs/beta-testing.md).
+- **Browser versions:** tested in real DevTools on Chromium 110 (the declared minimum), 153 and 156. CI runs the UI and real-DevTools tests on 110 and 156. **Show in Network panel** needs `chrome.devtools.panels.network.show`. That API is absent in Chrome 110, so the button is hidden there; it is present in 153 and 156.
+- **Redaction** hides every query and fragment value unless the parameter name is on a short allowlist of harmless names (`page`, `limit`, `sort`, `lang`, `format`…) and the value is short and plain. Path segments are kept unless they look like a token or an email address, so a secret placed directly in a path segment of ordinary length is not detected. Review a report before sharing it outside your team.
+- **Analysis:** the "likely source" is a rule-based reading of status and error codes, not a diagnosis.
+- **Capture:** requests that never finish are not listed (use the Network panel for those), and behaviour with Network → "Preserve log" turned on is untested.
+- **Halloween mode** (accents and `/spooky`) switches itself off after November 1, 2026.
+- **No beta feedback yet:** usability against the native Network panel has not been measured with real users.
+
+## License
+
+[MIT](LICENSE).
 
 ## Status
 

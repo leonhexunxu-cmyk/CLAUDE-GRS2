@@ -16,7 +16,15 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      # Playwright is a test-only tool, installed without touching package.json.
-      - run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      # Playwright is a test-only tool, installed without touching package.json. Pinned so CI
+      # tests a known Chromium (1.64.1 = Chromium 156); bump deliberately and re-verify.
+      - run: npm install --no-save playwright@1.64.1 && npx playwright install --with-deps chromium
       - run: node tests/ui/panel-ui.mjs
       - run: xvfb-run -a node tests/integration/real-devtools.mjs
+      # Oldest supported Chrome (manifest minimum_chrome_version): Playwright 1.30 ships Chromium 110.
+      - name: Download Chromium 110
+        run: PLAYWRIGHT_BROWSERS_PATH="$HOME/pw-chromium-110" npx -y playwright@1.30.0 install chromium
+      - name: UI test on Chromium 110
+        run: CHROMIUM_PATH="$(ls -d "$HOME"/pw-chromium-110/chromium-*/chrome-linux/chrome)" node tests/ui/panel-ui.mjs
+      - name: Real-DevTools test on Chromium 110
+        run: CHROMIUM_PATH="$(ls -d "$HOME"/pw-chromium-110/chromium-*/chrome-linux/chrome)" xvfb-run -a node tests/integration/real-devtools.mjs

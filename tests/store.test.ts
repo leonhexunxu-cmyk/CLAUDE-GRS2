@@ -189,3 +189,44 @@ test("requests are ordered by start time, like the native Network panel", () => 
   assert.deepEqual(events, [true, true, false, true, false]);
   assert.equal(store.get(3)?.name, "2");
 });
+
+test("same-millisecond ties follow DevTools' log order, as in the native Network panel", () => {
+  const t = "2026-10-24T12:00:00.124Z";
+  const css = harEntry({ url: "https://a.test/style.css", started: t, time: 8 });
+  const png = harEntry({ url: "https://a.test/missing.png", started: t, time: 12 });
+  const js = harEntry({ url: "https://a.test/app.js", started: t, time: 16 });
+  const store = new RequestStore();
+  let reorders = 0;
+  store.subscribe((c) => c.kind === "added" && c.requests.length === 0 && !c.appended && reorders++);
+  // Live events arrive in finish order (fastest first), which is not the issue order for the slow one.
+  store.add([css]);
+  store.add([js]);
+  store.add([png]);
+  assert.deepEqual(names(store), ["style.css", "app.js", "missing.png"]);
+  // getHAR returns the log in issue order: css, png, js.
+  store.applyLogOrder([css, png, js]);
+  assert.deepEqual(names(store), ["style.css", "missing.png", "app.js"]);
+  assert.equal(reorders, 1);
+  store.applyLogOrder([css, png, js]);
+  assert.equal(reorders, 1, "no event when the order is already right");
+  // Different start times still win over log position.
+  store.add([harEntry({ url: "https://a.test/early", started: "2026-10-24T12:00:00.100Z" })]);
+  assert.equal(names(store)[0], "early");
+});
+
+test("reconcile applies the log order through startCapture", () => {
+  const t = "2026-10-24T12:00:00.124Z";
+  const a1 = harEntry({ url: "https://a.test/one", started: t, time: 30 });
+  const a2 = harEntry({ url: "https://a.test/two", started: t, time: 5 });
+  const store = new RequestStore();
+  const net = fakeNetwork();
+  startCapture(store, net.api, net.timerOptions);
+  net.answerHar();
+  net.finish(a2); // finishes first
+  net.finish(a1);
+  assert.deepEqual(names(store), ["two", "one"]);
+  net.log = [a1, a2];
+  net.runTimers();
+  net.answerHar();
+  assert.deepEqual(names(store), ["one", "two"]);
+});

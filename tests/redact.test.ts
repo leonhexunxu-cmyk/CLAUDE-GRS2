@@ -34,11 +34,22 @@ test("unparseable, missing and data URLs never pass through raw", () => {
   assert.equal(redactUrl("data:text/plain;base64,c2VjcmV0").url, "data: URL (content omitted)");
 });
 
-test("non-sensitive parameters, order and encoding are preserved", () => {
-  const url = "https://shop.test/search?q=red%20shoes&page=2&sort=price&lang=en#reviews";
+test("allowlisted harmless parameters are kept; order and encoding are preserved", () => {
+  const url = "https://shop.test/search?page=2&sort=price&lang=en&format=json#reviews";
   assert.deepEqual(redactUrl(url), { url, redactions: 0 });
-  const mixed = redactUrl("https://shop.test/a?q=x&session=SUPERSECRET&page=1");
-  assert.equal(mixed.url, `https://shop.test/a?q=x&session=${REDACTED}&page=1`);
+  const mixed = redactUrl("https://shop.test/a?page=1&session=SUPERSECRET&sort=asc");
+  assert.equal(mixed.url, `https://shop.test/a?page=1&session=${REDACTED}&sort=asc`);
+});
+
+test("values are hidden by default unless the name is allowlisted and the value is plain", () => {
+  // Free text, IDs and unknown names are hidden: they may carry personal data or secrets.
+  assert.equal(redactUrl("https://shop.test/search?q=red%20shoes&page=2").url, `https://shop.test/search?q=${REDACTED}&page=2`);
+  assert.equal(redactUrl("https://a.test/api?id=12345&limit=10").url, `https://a.test/api?id=${REDACTED}&limit=10`);
+  // An allowlisted name with a secret-looking or non-plain value is still hidden.
+  assert.equal(redactUrl("https://a.test/api?page=jane%40example.com").url, `https://a.test/api?page=${REDACTED}`);
+  assert.equal(redactUrl("https://a.test/api?view=" + "a1".repeat(20)).url, `https://a.test/api?view=${REDACTED}`);
+  // Empty values have nothing to hide.
+  assert.equal(redactUrl("https://a.test/api?flag=&page=1").redactions, 0);
 });
 
 test("redaction never mutates the captured value", () => {
@@ -46,4 +57,13 @@ test("redaction never mutates the captured value", () => {
   const captured = { url: original };
   redactUrl(captured.url);
   assert.equal(captured.url, original);
+});
+
+test("short password names and email addresses are redacted (release audit)", () => {
+  assert.equal(redactUrl("https://a.test/api?pw=hunter2&page=1").url, `https://a.test/api?pw=${REDACTED}&page=1`);
+  assert.equal(redactUrl("https://a.test/u/jane.doe@example.com/profile").url, `https://a.test/u/${REDACTED}/profile`);
+  assert.equal(redactUrl("https://a.test/api?to=jane%40example.com&page=1").url, `https://a.test/api?to=${REDACTED}&page=1`);
+  // A short secret under a meaningless name cannot be recognised by patterns, so default-deny hides it.
+  assert.equal(redactUrl("https://a.test/api?t=abc123").url, `https://a.test/api?t=${REDACTED}`);
+  assert.equal(redactUrl("https://a.test/#t=abc123").url, `https://a.test/#t=${REDACTED}`);
 });

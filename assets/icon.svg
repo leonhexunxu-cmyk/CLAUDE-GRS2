@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Chrome Web Store layout: 96x96 artwork centred in a transparent 128x128 canvas. -->
+  <rect x="16" y="16" width="96" height="96" rx="22" fill="#2563c9"/>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="58" cy="58" r="24" stroke-width="8"/>
+    <path d="M76 76 94 94" stroke-width="10"/>
+    <path id="pulse" d="M42 60h7l4-10 7 18 5-12 2 4h6" stroke-width="5"/>
+  </g>
+</svg>

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Quick Debug: a focused network-request panel for Chrome DevTools.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
