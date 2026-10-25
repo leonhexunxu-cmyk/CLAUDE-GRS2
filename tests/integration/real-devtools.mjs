@@ -87,7 +87,6 @@ try {
   console.log(`Browser: ${(await (await fetch(`http://127.0.0.1:${debugPort}/json/version`)).json()).Browser}`);
   const base = `http://127.0.0.1:${pagePort}`;
   for (let i = 0; i < 20; i++) { try { await fetch(base); break; } catch { await sleep(100); } }
-  await page.goto(base + "/");
 
   const devtools = await connect((t) => t.url.startsWith("devtools://"));
   // Wait until the DevTools frontend has booted before touching its internals. Calling
@@ -99,6 +98,10 @@ try {
     return Boolean(find(document));
   })()`), 30_000);
   assert.ok(ready, "DevTools frontend finished booting within 30 s");
+  // Load the page only now, so DevTools is already recording network traffic. Loading it while
+  // DevTools was still booting (as before) left the log empty on the slower CI runner, which is
+  // the honest "capture started late" case, not the backfill this test checks.
+  await page.goto(base + "/");
   // The extension's panel is registered asynchronously after the frontend boots.
   const opened = await waitFor(() => devtools.evaluate(`(async () => {
     const UI = await import("./ui/legacy/legacy.js");
